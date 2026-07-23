@@ -23,7 +23,7 @@
                 </div>
                 <h1 class="text-3xl font-extrabold text-white mb-3">15-Stage Assessment</h1>
                 <p class="text-slate-400 mb-8 leading-relaxed">
-                    Test your decisions across 15 distinct stages. Your selections and scores are saved automatically so you can safely resume anytime.
+                    Test your decisions across 15 distinct stages. Unlock secret combination bonuses as you progress! Your selections are saved automatically.
                 </p>
 
                 <!-- Action Buttons -->
@@ -52,7 +52,7 @@
                     
                     <div class="flex items-center space-x-3">
                         <span class="bg-indigo-950/60 border border-indigo-500/30 px-3 py-1 rounded-full text-indigo-300 font-semibold text-xs">
-                            Score: <span x-text="totalScore"></span>
+                            Score: <span x-text="baseScore"></span>
                         </span>
                         
                         <!-- History Modal Trigger -->
@@ -94,7 +94,7 @@
                     </template>
                 </div>
 
-                <!-- NEXT STAGE / PROCEED BAR (Appears after choosing) -->
+                <!-- NEXT STAGE / PROCEED BAR -->
                 <div x-show="stageSubmitted" x-transition class="mt-6 p-4 rounded-xl bg-slate-900/60 border border-slate-700/80 flex items-center justify-between gap-4">
                     <div>
                         <span class="text-xs text-slate-400 block uppercase font-semibold">Points Earned</span>
@@ -113,15 +113,39 @@
         <template x-if="hasStarted && isFinished">
             <div>
                 <h2 class="text-2xl font-bold mb-2 text-center text-indigo-400">Quiz Completed!</h2>
-                <p class="text-center text-slate-400 mb-6">Here is how you performed across all stages:</p>
+                <p class="text-center text-slate-400 mb-6">Here is your final performance and score breakdown:</p>
                 
-                <div class="bg-indigo-950/50 border border-indigo-500/30 p-4 rounded-xl text-center mb-6">
-                    <span class="text-sm text-slate-300">Final Score</span>
-                    <div class="text-3xl font-extrabold text-indigo-400" x-text="totalScore"></div>
+                <!-- SCORE CARD WITH BONUS BREAKDOWN -->
+                <div class="bg-indigo-950/50 border border-indigo-500/30 p-5 rounded-xl text-center mb-6">
+                    <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Final Score</span>
+                    <div class="text-4xl font-extrabold text-indigo-400 my-1" x-text="totalScore"></div>
+                    
+                    <div class="flex justify-center items-center gap-4 text-xs text-slate-300 mt-3 pt-3 border-t border-indigo-500/20">
+                        <div>Base Score: <strong class="text-white" x-text="baseScore"></strong></div>
+                        <div x-show="bonusScore > 0" class="text-amber-400 font-bold">
+                            + <span x-text="bonusScore"></span> Bonus Pts!
+                        </div>
+                    </div>
                 </div>
 
-                <h3 class="font-semibold text-lg mb-3">Your Final Breakdown:</h3>
-                <div class="space-y-3 max-h-60 overflow-y-auto pr-2 mb-6">
+                <!-- UNLOCKED BONUS NOTIFICATION -->
+                <template x-if="appliedBonuses.length > 0">
+                    <div class="mb-6 space-y-2">
+                        <h4 class="text-xs font-semibold uppercase text-amber-400 tracking-wider">🎉 Bonus Combos Unlocked:</h4>
+                        <template x-for="(bonus, idx) in appliedBonuses" :key="idx">
+                            <div class="p-3 bg-amber-950/30 border border-amber-500/40 rounded-xl flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-amber-300 text-sm" x-text="bonus.title"></div>
+                                    <div class="text-xs text-slate-400" x-text="bonus.description"></div>
+                                </div>
+                                <span class="text-amber-400 font-extrabold text-sm bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30" x-text="`+${bonus.points}`"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <h3 class="font-semibold text-lg mb-3">Your Final Choices Breakdown:</h3>
+                <div class="space-y-3 max-h-56 overflow-y-auto pr-2 mb-6">
                     <template x-for="(record, index) in history" :key="index">
                         <div class="p-3 bg-slate-700/50 rounded-lg text-sm border border-slate-700">
                             <div class="text-slate-400 font-medium mb-1" x-text="`Stage ${index + 1}: ${record.question}`"></div>
@@ -171,7 +195,7 @@
                 </div>
 
                 <div class="mt-5 pt-3 border-t border-slate-700 flex justify-between items-center">
-                    <span class="text-xs text-slate-400">Total Points So Far: <strong class="text-indigo-400" x-text="totalScore"></strong></span>
+                    <span class="text-xs text-slate-400">Total Base Points: <strong class="text-indigo-400" x-text="baseScore"></strong></span>
                     <button @click="showHistoryModal = false" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition">
                         Back to Quiz
                     </button>
@@ -187,12 +211,14 @@
                 hasStarted: false,
                 showHistoryModal: false,
                 currentStage: 0,
+                baseScore: 0,
+                bonusScore: 0,
                 totalScore: 0,
                 isFinished: false,
                 history: [],
+                appliedBonuses: [],
                 totalStages: 15,
                 
-                // Track choice submission state per stage
                 stageSubmitted: false,
                 selectedChoiceIndex: null,
 
@@ -220,9 +246,12 @@
                         const data = JSON.parse(savedState);
                         this.hasStarted = data.hasStarted || false;
                         this.currentStage = data.currentStage || 0;
+                        this.baseScore = data.baseScore || 0;
+                        this.bonusScore = data.bonusScore || 0;
                         this.totalScore = data.totalScore || 0;
                         this.isFinished = data.isFinished || false;
                         this.history = data.history || [];
+                        this.appliedBonuses = data.appliedBonuses || [];
                         this.stageSubmitted = data.stageSubmitted || false;
                         this.selectedChoiceIndex = data.selectedChoiceIndex ?? null;
                     }
@@ -242,11 +271,13 @@
                     this.selectedChoiceIndex = choiceIndex;
                     this.stageSubmitted = true;
 
-                    // Update score and history
-                    this.totalScore += chosen.points;
+                    // Update base score and history
+                    this.baseScore += chosen.points;
                     this.history.push({
+                        stageIndex: this.currentStage,
                         question: stageData.question,
                         choiceText: chosen.text,
+                        choiceIndex: choiceIndex, // Stored to verify combination bonuses
                         points: chosen.points
                     });
 
@@ -260,18 +291,52 @@
 
                     if (this.currentStage >= this.totalStages) {
                         this.isFinished = true;
+                        this.evaluateBonuses();
+                    } else {
+                        this.totalScore = this.baseScore;
                     }
 
                     this.saveState();
+                },
+
+                // EVALUATE COMBINATION BONUS RULES
+                evaluateBonuses() {
+                    this.appliedBonuses = [];
+                    let extraPoints = 0;
+
+                    // RULE 1: Stages 10 to 15 (stage indices 9 to 14) all selected Option 1 (choiceIndex 0)
+                    const stages10to15 = [9, 10, 11, 12, 13, 14];
+                    const isStreak10to15 = stages10to15.every(
+                        idx => this.history[idx] && this.history[idx].choiceIndex === 0
+                    );
+
+                    if (isStreak10to15) {
+                        this.appliedBonuses.push({
+                            title: "Stage 10–15 Option 1 Master Streak",
+                            description: "Selected the 1st option for all stages from 10 through 15",
+                            points: 1000
+                        });
+                        extraPoints += 1000;
+                    }
+
+                    // --- ADD ADDITIONAL CUSTOM BONUS RULES HERE IF DESIRED ---
+                    // Example:
+                    // if (this.history[0]?.choiceIndex === 0 && this.history[1]?.choiceIndex === 0) { ... }
+
+                    this.bonusScore = extraPoints;
+                    this.totalScore = this.baseScore + this.bonusScore;
                 },
 
                 saveState() {
                     const state = {
                         hasStarted: this.hasStarted,
                         currentStage: this.currentStage,
+                        baseScore: this.baseScore,
+                        bonusScore: this.bonusScore,
                         totalScore: this.totalScore,
                         isFinished: this.isFinished,
                         history: this.history,
+                        appliedBonuses: this.appliedBonuses,
                         stageSubmitted: this.stageSubmitted,
                         selectedChoiceIndex: this.selectedChoiceIndex
                     };
@@ -281,9 +346,12 @@
                 resetAndStart() {
                     this.hasStarted = true;
                     this.currentStage = 0;
+                    this.baseScore = 0;
+                    this.bonusScore = 0;
                     this.totalScore = 0;
                     this.isFinished = false;
                     this.history = [];
+                    this.appliedBonuses = [];
                     this.stageSubmitted = false;
                     this.selectedChoiceIndex = null;
                     localStorage.removeItem('quiz_state');
