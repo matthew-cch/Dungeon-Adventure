@@ -277,7 +277,7 @@
                         stageIndex: this.currentStage,
                         question: stageData.question,
                         choiceText: chosen.text,
-                        choiceIndex: choiceIndex, // Stored to verify combination bonuses
+                        choiceIndex: choiceIndex, // Saved to evaluate multi-stage combos
                         points: chosen.points
                     });
 
@@ -304,24 +304,36 @@
                     this.appliedBonuses = [];
                     let extraPoints = 0;
 
-                    // RULE 1: Stages 10 to 15 (stage indices 9 to 14) all selected Option 1 (choiceIndex 0)
-                    const stages10to15 = [9, 10, 11, 12, 13, 14];
-                    const isStreak10to15 = stages10to15.every(
-                        idx => this.history[idx] && this.history[idx].choiceIndex === 0
+                    // RULE: Mixed Pattern across Stages 10 to 15
+                    // Stage 10: 1st option (stageIdx: 9,  choiceIdx: 0)
+                    // Stage 11: 2nd option (stageIdx: 10, choiceIdx: 1)
+                    // Stage 12: 2nd option (stageIdx: 11, choiceIdx: 1)
+                    // Stage 13: 2nd option (stageIdx: 12, choiceIdx: 1)
+                    // Stage 14: 1st option (stageIdx: 13, choiceIdx: 0)
+                    // Stage 15: 2nd option (stageIdx: 14, choiceIdx: 1)
+                    const mixedPattern = [
+                        { stageIdx: 9,  choiceIdx: 0 },
+                        { stageIdx: 10, choiceIdx: 1 },
+                        { stageIdx: 11, choiceIdx: 1 },
+                        { stageIdx: 12, choiceIdx: 1 },
+                        { stageIdx: 13, choiceIdx: 0 },
+                        { stageIdx: 14, choiceIdx: 1 }
+                    ];
+
+                    const isMixedPatternMatched = mixedPattern.every(
+                        rule => this.history[rule.stageIdx]?.choiceIndex === rule.choiceIdx
                     );
 
-                    if (isStreak10to15) {
+                    if (isMixedPatternMatched) {
                         this.appliedBonuses.push({
-                            title: "Stage 10–15 Option 1 Master Streak",
-                            description: "Selected the 1st option for all stages from 10 through 15",
+                            title: "Tactical Sequence Bonus",
+                            description: "Selected 1st on St 10, 2nd on St 11–13, 1st on St 14, and 2nd on St 15",
                             points: 1000
                         });
                         extraPoints += 1000;
                     }
 
-                    // --- ADD ADDITIONAL CUSTOM BONUS RULES HERE IF DESIRED ---
-                    // Example:
-                    // if (this.history[0]?.choiceIndex === 0 && this.history[1]?.choiceIndex === 0) { ... }
+                    // --- ADD ANY OTHER MIXED OR STREAK COMBOS HERE ---
 
                     this.bonusScore = extraPoints;
                     this.totalScore = this.baseScore + this.bonusScore;
