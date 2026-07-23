@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Stage Questionnaire</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-xl bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 relative" x-data="quizApp()">
+
+        <!-- 1. START / WELCOME PAGE -->
+        <template x-if="!hasStarted">
+            <div class="text-center py-6">
+                <div class="inline-block p-4 bg-indigo-600/20 rounded-full text-indigo-400 mb-4">
+                    <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 10 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-3xl font-extrabold text-white mb-3">15-Stage Assessment</h1>
+                <p class="text-slate-400 mb-8 leading-relaxed">
+                    Test your decisions across 15 distinct stages. Your selections and scores are saved automatically so you can safely resume anytime.
+                </p>
+
+                <!-- Action Buttons -->
+                <div class="space-y-3">
+                    <template x-if="history.length > 0 && !isFinished">
+                        <button @click="startQuiz()" 
+                            class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold transition text-white shadow-lg shadow-indigo-600/30">
+                            Resume Quiz (Stage <span x-text="currentStage + 1"></span>/15)
+                        </button>
+                    </template>
+
+                    <button @click="resetAndStart()" 
+                        :class="history.length > 0 && !isFinished ? 'w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition text-slate-300' : 'w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold transition text-white shadow-lg shadow-indigo-600/30'">
+                        <span x-text="history.length > 0 && !isFinished ? 'Start New Quiz' : 'Start Quiz'"></span>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- 2. QUIZ STAGE VIEW -->
+        <template x-if="hasStarted && currentStage < totalStages && !isFinished">
+            <div>
+                <!-- HEADER BAR -->
+                <div class="flex justify-between items-center mb-4 text-sm text-slate-400">
+                    <span>Stage <span x-text="currentStage + 1" class="font-bold text-white"></span> / <span x-text="totalStages"></span></span>
+                    
+                    <div class="flex items-center space-x-3">
+                        <span class="bg-indigo-950/60 border border-indigo-500/30 px-3 py-1 rounded-full text-indigo-300 font-semibold text-xs">
+                            Score: <span x-text="totalScore"></span>
+                        </span>
+                        
+                        <!-- History Modal Trigger -->
+                        <button @click="showHistoryModal = true" 
+                            class="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-xs font-medium rounded-full text-slate-200 transition flex items-center gap-1 border border-slate-600">
+                            <span>📋 Choices (<span x-text="history.length"></span>)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-700 h-2 rounded-full mb-6 overflow-hidden">
+                    <div class="bg-indigo-500 h-full transition-all duration-300" :style="`width: ${((currentStage) / totalStages) * 100}%`"></div>
+                </div>
+
+                <!-- Stage Question -->
+                <h2 class="text-xl sm:text-2xl font-semibold mb-6 text-white leading-snug" x-text="stages[currentStage].question"></h2>
+                
+                <!-- Choices List -->
+                <div class="space-y-4">
+                    <template x-for="(choice, index) in stages[currentStage].choices" :key="index">
+                        <button @click="selectChoice(index)" 
+                            :disabled="stageSubmitted"
+                            :class="{
+                                'w-full text-left p-4 rounded-xl transition border flex justify-between items-center': true,
+                                'bg-slate-700 hover:bg-indigo-600 border-slate-600 hover:border-indigo-500': !stageSubmitted,
+                                'bg-indigo-950/80 border-indigo-500 text-white ring-2 ring-indigo-500/50': stageSubmitted && selectedChoiceIndex === index,
+                                'bg-slate-800/60 border-slate-700 text-slate-400 opacity-60': stageSubmitted && selectedChoiceIndex !== index
+                            }">
+                            <span class="font-medium pr-2" x-text="choice.text"></span>
+                            
+                            <!-- Reveal Points After Choice -->
+                            <span x-show="stageSubmitted" 
+                                class="text-xs font-bold px-2.5 py-1 rounded-md transition-all"
+                                :class="selectedChoiceIndex === index ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300'"
+                                x-text="`+${choice.points} pts`">
+                            </span>
+                        </button>
+                    </template>
+                </div>
+
+                <!-- NEXT STAGE / PROCEED BAR (Appears after choosing) -->
+                <div x-show="stageSubmitted" x-transition class="mt-6 p-4 rounded-xl bg-slate-900/60 border border-slate-700/80 flex items-center justify-between gap-4">
+                    <div>
+                        <span class="text-xs text-slate-400 block uppercase font-semibold">Points Earned</span>
+                        <span class="text-lg font-bold text-indigo-400" x-text="`+${stages[currentStage].choices[selectedChoiceIndex]?.points || 0} pts`"></span>
+                    </div>
+
+                    <button @click="nextStage()" 
+                        class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition flex items-center gap-2 shadow-lg shadow-indigo-600/30">
+                        <span x-text="currentStage + 1 < totalStages ? 'Next Stage →' : 'View Results →'"></span>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <!-- 3. COMPLETED VIEW -->
+        <template x-if="hasStarted && isFinished">
+            <div>
+                <h2 class="text-2xl font-bold mb-2 text-center text-indigo-400">Quiz Completed!</h2>
+                <p class="text-center text-slate-400 mb-6">Here is how you performed across all stages:</p>
+                
+                <div class="bg-indigo-950/50 border border-indigo-500/30 p-4 rounded-xl text-center mb-6">
+                    <span class="text-sm text-slate-300">Final Score</span>
+                    <div class="text-3xl font-extrabold text-indigo-400" x-text="totalScore"></div>
+                </div>
+
+                <h3 class="font-semibold text-lg mb-3">Your Final Breakdown:</h3>
+                <div class="space-y-3 max-h-60 overflow-y-auto pr-2 mb-6">
+                    <template x-for="(record, index) in history" :key="index">
+                        <div class="p-3 bg-slate-700/50 rounded-lg text-sm border border-slate-700">
+                            <div class="text-slate-400 font-medium mb-1" x-text="`Stage ${index + 1}: ${record.question}`"></div>
+                            <div class="text-indigo-300 font-semibold" x-text="`Chosen: ${record.choiceText} (+${record.points} pts)`"></div>
+                        </div>
+                    </template>
+                </div>
+
+                <button @click="resetAndStart()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-semibold transition">
+                    Restart Quiz
+                </button>
+            </div>
+        </template>
+
+        <!-- 4. IN-QUIZ HISTORY MODAL OVERLAY -->
+        <div x-show="showHistoryModal" 
+            x-transition.opacity
+            class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            style="display: none;">
+            
+            <div @click.away="showHistoryModal = false" class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+                    <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                        <span>📋 Previous Choices</span>
+                    </h3>
+                    <button @click="showHistoryModal = false" class="text-slate-400 hover:text-white text-lg font-bold">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- History Item List -->
+                <div class="space-y-3 max-h-72 overflow-y-auto pr-2">
+                    <template x-if="history.length === 0">
+                        <p class="text-slate-400 text-center py-6 text-sm">No selections made yet.</p>
+                    </template>
+
+                    <template x-for="(record, index) in history" :key="index">
+                        <div class="p-3 bg-slate-700/50 rounded-xl text-sm border border-slate-700/80">
+                            <div class="text-slate-400 text-xs font-semibold uppercase mb-1" x-text="`Stage ${index + 1}`"></div>
+                            <div class="text-slate-200 font-medium mb-1" x-text="record.question"></div>
+                            <div class="text-indigo-400 font-semibold text-xs flex justify-between items-center">
+                                <span x-text="`Chosen: ${record.choiceText}`"></span>
+                                <span class="bg-indigo-900/50 px-2 py-0.5 rounded border border-indigo-500/20" x-text="`+${record.points} pts`"></span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-5 pt-3 border-t border-slate-700 flex justify-between items-center">
+                    <span class="text-xs text-slate-400">Total Points So Far: <strong class="text-indigo-400" x-text="totalScore"></strong></span>
+                    <button @click="showHistoryModal = false" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition">
+                        Back to Quiz
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function quizApp() {
+            return {
+                hasStarted: false,
+                showHistoryModal: false,
+                currentStage: 0,
+                totalScore: 0,
+                isFinished: false,
+                history: [],
+                totalStages: 15,
+                
+                // Track choice submission state per stage
+                stageSubmitted: false,
+                selectedChoiceIndex: null,
+
+                stages: [
+                    { question: "Stage 1: Choose your starting environment", choices: [{ text: "Misty Mountain", points: 10 }, { text: "Sunny Beach", points: 5 }] },
+                    { question: "Stage 2: How do you tackle a challenge?", choices: [{ text: "Head-on with force", points: 8 }, { text: "Strategy and planning", points: 10 }] },
+                    { question: "Stage 3: Preferred travel method", choices: [{ text: "Walking on foot", points: 5 }, { text: "Riding a beast", points: 10 }] },
+                    { question: "Stage 4: Pick a tool", choices: [{ text: "Ancient Sword", points: 10 }, { text: "Magic Wand", points: 8 }] },
+                    { question: "Stage 5: Dealing with strangers", choices: [{ text: "Greet cautiously", points: 6 }, { text: "Ignore and move on", points: 4 }] },
+                    { question: "Stage 6: Nighttime shelter", choices: [{ text: "Build a campfire", points: 7 }, { text: "Find a cave", points: 9 }] },
+                    { question: "Stage 7: Encounter a locked door", choices: [{ text: "Pick the lock", points: 8 }, { text: "Find another way", points: 10 }] },
+                    { question: "Stage 8: Core philosophy", choices: [{ text: "Knowledge is power", points: 10 }, { text: "Action speaks louder", points: 8 }] },
+                    { question: "Stage 9: Source of motivation", choices: [{ text: "Internal drive", points: 10 }, { text: "External rewards", points: 6 }] },
+                    { question: "Stage 10: Weather preference", choices: [{ text: "Rainy and cozy", points: 7 }, { text: "Clear and bright", points: 8 }] },
+                    { question: "Stage 11: Risk tolerance", choices: [{ text: "High risk, high reward", points: 10 }, { text: "Safe and steady", points: 5 }] },
+                    { question: "Stage 12: Learning style", choices: [{ text: "Hands-on practice", points: 9 }, { text: "Reading books", points: 8 }] },
+                    { question: "Stage 13: Teamwork dynamic", choices: [{ text: "Lead the group", points: 10 }, { text: "Support from behind", points: 7 }] },
+                    { question: "Stage 14: Handling failure", choices: [{ text: "Learn and retry immediately", points: 10 }, { text: "Take a break to reflect", points: 8 }] },
+                    { question: "Stage 15: Final destination goal", choices: [{ text: "Achieve mastery", points: 15 }, { text: "Find inner peace", points: 12 }] },
+                ],
+
+                init() {
+                    const savedState = localStorage.getItem('quiz_state');
+                    if (savedState) {
+                        const data = JSON.parse(savedState);
+                        this.hasStarted = data.hasStarted || false;
+                        this.currentStage = data.currentStage || 0;
+                        this.totalScore = data.totalScore || 0;
+                        this.isFinished = data.isFinished || false;
+                        this.history = data.history || [];
+                        this.stageSubmitted = data.stageSubmitted || false;
+                        this.selectedChoiceIndex = data.selectedChoiceIndex ?? null;
+                    }
+                },
+
+                startQuiz() {
+                    this.hasStarted = true;
+                    this.saveState();
+                },
+
+                selectChoice(choiceIndex) {
+                    if (this.stageSubmitted) return;
+
+                    const stageData = this.stages[this.currentStage];
+                    const chosen = stageData.choices[choiceIndex];
+
+                    this.selectedChoiceIndex = choiceIndex;
+                    this.stageSubmitted = true;
+
+                    // Update score and history
+                    this.totalScore += chosen.points;
+                    this.history.push({
+                        question: stageData.question,
+                        choiceText: chosen.text,
+                        points: chosen.points
+                    });
+
+                    this.saveState();
+                },
+
+                nextStage() {
+                    this.currentStage++;
+                    this.stageSubmitted = false;
+                    this.selectedChoiceIndex = null;
+
+                    if (this.currentStage >= this.totalStages) {
+                        this.isFinished = true;
+                    }
+
+                    this.saveState();
+                },
+
+                saveState() {
+                    const state = {
+                        hasStarted: this.hasStarted,
+                        currentStage: this.currentStage,
+                        totalScore: this.totalScore,
+                        isFinished: this.isFinished,
+                        history: this.history,
+                        stageSubmitted: this.stageSubmitted,
+                        selectedChoiceIndex: this.selectedChoiceIndex
+                    };
+                    localStorage.setItem('quiz_state', JSON.stringify(state));
+                },
+
+                resetAndStart() {
+                    this.hasStarted = true;
+                    this.currentStage = 0;
+                    this.totalScore = 0;
+                    this.isFinished = false;
+                    this.history = [];
+                    this.stageSubmitted = false;
+                    this.selectedChoiceIndex = null;
+                    localStorage.removeItem('quiz_state');
+                    this.saveState();
+                }
+            }
+        }
+    </script>
+</body>
+</html>
