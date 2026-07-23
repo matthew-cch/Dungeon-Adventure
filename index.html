@@ -78,13 +78,14 @@
                             :disabled="stageSubmitted"
                             :class="{
                                 'w-full text-left p-4 rounded-xl transition border flex justify-between items-center': true,
-                                'bg-slate-700 hover:bg-indigo-600 border-slate-600 hover:border-indigo-500': !stageSubmitted,
+                                'bg-slate-700 hover:bg-indigo-600/60 border-slate-600': !stageSubmitted && selectedChoiceIndex !== index,
+                                'bg-indigo-900/80 border-indigo-400 text-white ring-2 ring-indigo-400/50': !stageSubmitted && selectedChoiceIndex === index,
                                 'bg-indigo-950/80 border-indigo-500 text-white ring-2 ring-indigo-500/50': stageSubmitted && selectedChoiceIndex === index,
                                 'bg-slate-800/60 border-slate-700 text-slate-400 opacity-60': stageSubmitted && selectedChoiceIndex !== index
                             }">
                             <span class="font-medium pr-2" x-text="choice.text"></span>
                             
-                            <!-- Reveal Points After Choice -->
+                            <!-- Reveal Points After Confirmation -->
                             <span x-show="stageSubmitted" 
                                 class="text-xs font-bold px-2.5 py-1 rounded-md transition-all"
                                 :class="selectedChoiceIndex === index ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-slate-300'"
@@ -94,17 +95,35 @@
                     </template>
                 </div>
 
-                <!-- NEXT STAGE / PROCEED BAR -->
-                <div x-show="stageSubmitted" x-transition class="mt-6 p-4 rounded-xl bg-slate-900/60 border border-slate-700/80 flex items-center justify-between gap-4">
-                    <div>
-                        <span class="text-xs text-slate-400 block uppercase font-semibold">Points Earned</span>
-                        <span class="text-lg font-bold text-indigo-400" x-text="`+${stages[currentStage].choices[selectedChoiceIndex]?.points || 0} pts`"></span>
-                    </div>
+                <!-- CONFIRM / NEXT ACTION BAR -->
+                <div class="mt-6">
+                    <!-- Step 1: Confirm Button (Shown before submission) -->
+                    <template x-if="!stageSubmitted">
+                        <div class="flex justify-end">
+                            <button @click="confirmChoice()" 
+                                :disabled="selectedChoiceIndex === null"
+                                :class="selectedChoiceIndex !== null 
+                                    ? 'w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30' 
+                                    : 'w-full sm:w-auto px-6 py-3 bg-slate-700/50 text-slate-500 rounded-xl font-semibold cursor-not-allowed border border-slate-700'">
+                                ✓ Confirm Answer
+                            </button>
+                        </div>
+                    </template>
 
-                    <button @click="nextStage()" 
-                        class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition flex items-center gap-2 shadow-lg shadow-indigo-600/30">
-                        <span x-text="currentStage + 1 < totalStages ? 'Next Stage →' : 'View Results →'"></span>
-                    </button>
+                    <!-- Step 2: Confirmed State (Shows points earned & Next button) -->
+                    <template x-if="stageSubmitted">
+                        <div x-transition class="p-4 rounded-xl bg-slate-900/60 border border-slate-700/80 flex items-center justify-between gap-4">
+                            <div>
+                                <span class="text-xs text-slate-400 block uppercase font-semibold">Points Earned</span>
+                                <span class="text-lg font-bold text-indigo-400" x-text="`+${stages[currentStage].choices[selectedChoiceIndex]?.points || 0} pts`"></span>
+                            </div>
+
+                            <button @click="nextStage()" 
+                                class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition flex items-center gap-2 shadow-lg shadow-indigo-600/30">
+                                <span x-text="currentStage + 1 < totalStages ? 'Next Stage →' : 'View Results →'"></span>
+                            </button>
+                        </div>
+                    </template>
                 </div>
             </div>
         </template>
@@ -262,13 +281,20 @@
                     this.saveState();
                 },
 
+                // Select an option without submitting it yet
                 selectChoice(choiceIndex) {
                     if (this.stageSubmitted) return;
+                    this.selectedChoiceIndex = choiceIndex;
+                    this.saveState();
+                },
+
+                // Confirm the selection and apply points
+                confirmChoice() {
+                    if (this.selectedChoiceIndex === null || this.stageSubmitted) return;
 
                     const stageData = this.stages[this.currentStage];
-                    const chosen = stageData.choices[choiceIndex];
+                    const chosen = stageData.choices[this.selectedChoiceIndex];
 
-                    this.selectedChoiceIndex = choiceIndex;
                     this.stageSubmitted = true;
 
                     // Update base score and history
@@ -277,7 +303,7 @@
                         stageIndex: this.currentStage,
                         question: stageData.question,
                         choiceText: chosen.text,
-                        choiceIndex: choiceIndex, // Saved to evaluate multi-stage combos
+                        choiceIndex: this.selectedChoiceIndex,
                         points: chosen.points
                     });
 
@@ -299,18 +325,10 @@
                     this.saveState();
                 },
 
-                // EVALUATE COMBINATION BONUS RULES
                 evaluateBonuses() {
                     this.appliedBonuses = [];
                     let extraPoints = 0;
 
-                    // RULE: Mixed Pattern across Stages 10 to 15
-                    // Stage 10: 1st option (stageIdx: 9,  choiceIdx: 0)
-                    // Stage 11: 2nd option (stageIdx: 10, choiceIdx: 1)
-                    // Stage 12: 2nd option (stageIdx: 11, choiceIdx: 1)
-                    // Stage 13: 2nd option (stageIdx: 12, choiceIdx: 1)
-                    // Stage 14: 1st option (stageIdx: 13, choiceIdx: 0)
-                    // Stage 15: 2nd option (stageIdx: 14, choiceIdx: 1)
                     const mixedPattern = [
                         { stageIdx: 9,  choiceIdx: 0 },
                         { stageIdx: 10, choiceIdx: 1 },
@@ -332,8 +350,6 @@
                         });
                         extraPoints += 1000;
                     }
-
-                    // --- ADD ANY OTHER MIXED OR STREAK COMBOS HERE ---
 
                     this.bonusScore = extraPoints;
                     this.totalScore = this.baseScore + this.bonusScore;
